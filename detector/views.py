@@ -10,6 +10,9 @@ from rest_framework import status
 from huggingface_hub import hf_hub_download
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing import image
+import logging
+
+logger = logging.getLogger(__name__)
 
 # =========================
 # Hugging Face Repo Details
@@ -23,18 +26,30 @@ _index_to_class = None
 def get_model_and_mapping():
     global _model, _index_to_class
     if _model is None:
-        print("Downloading and loading model...")
-        model_path = hf_hub_download(repo_id=REPO_ID, filename="V1.h5")
-        _model = load_model(model_path)
+        try:
+            print("--- Starting Model Download from Hugging Face ---")
+            logger.info("Downloading and loading model...")
 
-        pkl_path = hf_hub_download(repo_id=REPO_ID, filename="V1.pkl")
-        with open(pkl_path, 'rb') as f:
-            class_indices = pickle.load(f)
-        _index_to_class = {v: k for k, v in class_indices.items()}
+            model_path = hf_hub_download(repo_id=REPO_ID, filename="V1.h5")
+            print(f"Model downloaded to: {model_path}")
+            _model = load_model(model_path)
+
+            pkl_path = hf_hub_download(repo_id=REPO_ID, filename="V1.pkl")
+            print(f"Mapping downloaded to: {pkl_path}")
+            with open(pkl_path, 'rb') as f:
+                class_indices = pickle.load(f)
+            _index_to_class = {v: k for k, v in class_indices.items()}
+            print("--- Model and Mapping Loaded Successfully ---")
+        except Exception as e:
+            print(f"!!! Error Loading Model: {str(e)}")
+            raise e
     return _model, _index_to_class
 
 class FlowerDetectionView(APIView):
     parser_classes = (MultiPartParser, FormParser)
+
+    def get(self, request):
+        return Response({"status": "Server is running. Send a POST request with an image."}, status=status.HTTP_200_OK)
 
     def post(self, request, *args, **kwargs):
         if 'image' not in request.FILES:
@@ -43,8 +58,10 @@ class FlowerDetectionView(APIView):
         try:
             # 1. Get the image from the request
             up_image = request.FILES['image']
+            print(f"Received image: {up_image.name}")
 
             # 2. Load Model and Mapping
+            # This part takes the most time on Render (Cold Start)
             model, index_to_class = get_model_and_mapping()
 
             # 3. Preprocess Image
@@ -64,9 +81,9 @@ class FlowerDetectionView(APIView):
             # 5. Get Result
             if int(predicted_index) in index_to_class:
                 predicted_class = index_to_class[int(predicted_index)]
-
-                # You might want to add a real description here or fetch it from a DB
                 description = f"This is a {predicted_class}. (Description can be expanded with more data)."
+
+                print(f"Prediction: {predicted_class} ({confidence:.2f})")
 
                 return Response({
                     "flowerName": predicted_class,
@@ -79,4 +96,5 @@ class FlowerDetectionView(APIView):
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         except Exception as e:
+            print(f"Prediction Error: {str(e)}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
