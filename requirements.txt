@@ -1,0 +1,7 @@
+django
+djangorestframework
+django-cors-headers
+tensorflow
+numpy
+huggingface_hub
+pillow
