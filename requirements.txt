@@ -16,11 +16,9 @@ sqlparse
 typing_extensions
 tzdata
 urllib3
-
-tensorflow-cpu==2.15.0
+tensorflow-cpu==2.12.0
 numpy<2.0.0
 huggingface_hub
 Pillow
-
 gunicorn
 whitenoise
